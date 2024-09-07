@@ -9,7 +9,7 @@ use tui_textarea::{CursorMove, Input, TextArea};
 
 use crate::{
   action::Action,
-  git::git_repo::{GitBranch, GitRepo},
+  git::git_wrapper::{git_validate_branch_name, GitBranch},
   tui::Frame,
 };
 
@@ -42,12 +42,12 @@ impl BranchInput {
     Some(input)
   }
 
-  fn validate_branch_name(&mut self, repo: &dyn GitRepo, current_branches: Vec<&GitBranch>) {
+  fn validate_branch_name(&mut self, current_branches: Vec<&GitBranch>) {
     if self.text_input.lines().first().is_none() {
       return;
     }
     let proposed_name = self.text_input.lines().first().unwrap();
-    let is_valid = repo.validate_branch_name(proposed_name);
+    let is_valid = git_validate_branch_name(proposed_name);
     let is_unique_name = !current_branches.iter().any(|b| b.name.eq(proposed_name));
     if is_valid.is_err() || !is_valid.unwrap() || !is_unique_name {
       self.text_input.set_style(Style::default().fg(Color::LightRed));
@@ -58,12 +58,7 @@ impl BranchInput {
     self.input_state.is_valid = Some(true);
   }
 
-  pub fn handle_key_event(
-    &mut self,
-    key_event: KeyEvent,
-    repo: &dyn GitRepo,
-    current_branches: Vec<&GitBranch>,
-  ) -> Option<Action> {
+  pub fn handle_key_event(&mut self, key_event: KeyEvent, current_branches: Vec<&GitBranch>) -> Option<Action> {
     match key_event {
       KeyEvent { code: KeyCode::Esc, modifiers: KeyModifiers::NONE, kind: _, state: _ } => {
         self.input_state.value = None;
@@ -89,7 +84,7 @@ impl BranchInput {
       },
       _ => {
         if self.text_input.input(Input::from(key_event)) {
-          self.validate_branch_name(repo, current_branches);
+          self.validate_branch_name(current_branches);
           let new_branch_name = self.get_text();
           if new_branch_name.is_some() {
             self.input_state.value = new_branch_name;

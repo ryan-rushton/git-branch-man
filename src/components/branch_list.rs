@@ -14,7 +14,9 @@ use crate::{
     Component,
   },
   error::Error,
-  git::git_repo::{GitBranch, GitRepo},
+  git::git_wrapper::{
+    git_checkout_branch_from_name, git_create_branch, git_delete_branch, git_local_branches, GitBranch,
+  },
   tui::Frame,
 };
 
@@ -30,7 +32,6 @@ enum Mode {
 
 pub struct BranchList {
   mode: Mode,
-  repo: Box<dyn GitRepo>,
   error: Option<String>,
   // List state
   branches: Vec<BranchItem>,
@@ -42,12 +43,11 @@ pub struct BranchList {
 }
 
 impl BranchList {
-  pub fn new(repo: Box<dyn GitRepo>) -> Self {
+  pub fn new() -> Self {
     // Assume branch names are all valid as they come from git
     let branches: Vec<BranchItem> =
-      repo.local_branches().unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
+      git_local_branches().unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
     BranchList {
-      repo,
       mode: Mode::Selection,
       error: None,
       branches,
@@ -96,7 +96,7 @@ impl BranchList {
       return Ok(());
     }
     let name_to_checkout = maybe_selected.unwrap().branch.name.clone();
-    self.repo.checkout_branch_from_name(&name_to_checkout)?;
+    git_checkout_branch_from_name(&name_to_checkout)?;
     for existing_branch in self.branches.iter_mut() {
       existing_branch.branch.is_head = existing_branch.branch.name == name_to_checkout;
     }
@@ -120,7 +120,7 @@ impl BranchList {
     if selected.is_none() {
       return Ok(());
     }
-    let delete_result = self.repo.delete_branch(&selected.unwrap().branch);
+    let delete_result = git_delete_branch(&selected.unwrap().branch);
     if delete_result.is_err() {
       return Ok(());
     }
@@ -139,7 +139,7 @@ impl BranchList {
       if !branch_item.staged_for_deletion {
         continue;
       }
-      let del_result = self.repo.delete_branch(&branch_item.branch);
+      let del_result = git_delete_branch(&branch_item.branch);
       if del_result.is_ok() {
         indexes_to_delete.push(branch_index);
       } else {
@@ -163,10 +163,10 @@ impl BranchList {
 
   fn create_branch(&mut self, name: String) -> Result<(), Error> {
     let branch = GitBranch { name: name.clone(), is_head: false, upstream: None };
-    self.repo.create_branch(&branch)?;
+    git_create_branch(&branch)?;
     self.branches.push(BranchItem::new(branch, true));
     self.branches.sort_by(|a, b| a.branch.name.cmp(&b.branch.name));
-    self.repo.checkout_branch_from_name(&name)?;
+    git_checkout_branch_from_name(&name)?;
     for existing_branch in self.branches.iter_mut() {
       existing_branch.branch.is_head = existing_branch.branch.name == name;
     }
@@ -285,11 +285,11 @@ impl Component for BranchList {
         Ok(None)
       },
       Action::UpdateNewBranchName(key_event) => {
-        Ok(self.branch_input.handle_key_event(
-          key_event,
-          &*self.repo,
-          self.branches.iter().map(|branch_item| &branch_item.branch).collect(),
-        ))
+        Ok(
+          self
+            .branch_input
+            .handle_key_event(key_event, self.branches.iter().map(|branch_item| &branch_item.branch).collect()),
+        )
       },
       Action::CheckoutSelectedBranch => {
         let result = self.checkout_selected();
