@@ -33,8 +33,8 @@ pub struct App {
 impl App {
   pub fn new() -> Result<Self> {
     let config = Config::new()?;
-    let branch_list =  Box::new(BranchList::new());
-    let stash_list = Box::new(StashList::new());
+    let branch_list = Box::new(BranchList::default());
+    let stash_list = Box::new(StashList::default());
     let mode = Mode::Default;
     Ok(Self { config, branch_list, stash_list, should_quit: false, should_suspend: false, mode, view: View::Branches })
   }
@@ -42,8 +42,7 @@ impl App {
   pub async fn run(&mut self) -> Result<()> {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
-    let mut tui = tui::Tui::new()?.tick_rate(TICK_RATE).frame_rate(FRAME_RATE);
-    // tui.mouse(true);
+    let mut tui = Tui::new()?.tick_rate(TICK_RATE).frame_rate(FRAME_RATE);
     tui.enter()?;
 
     self.branch_list.register_action_handler(action_tx.clone())?;

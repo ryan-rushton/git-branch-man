@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
   layout::{Constraint, Direction, Layout, Rect},
@@ -42,8 +44,8 @@ pub struct BranchList {
   instruction_footer: InstructionFooter,
 }
 
-impl BranchList {
-  pub fn new() -> Self {
+impl Default for BranchList {
+  fn default() -> Self {
     // Assume branch names are all valid as they come from git
     let branches: Vec<BranchItem> =
       git_local_branches().unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
@@ -57,7 +59,9 @@ impl BranchList {
       instruction_footer: InstructionFooter::default(),
     }
   }
+}
 
+impl BranchList {
   pub fn clear_error(&mut self) {
     self.error = None;
   }
@@ -220,7 +224,8 @@ impl BranchList {
     let component = Paragraph::new(text)
       .block(Block::bordered().title("Error"))
       .style(Style::from(Color::Red))
-      .wrap(Wrap { trim: true });
+      .wrap(Wrap { trim: true })
+      .scroll((1, 0));
     f.render_widget(component, area);
   }
 }
@@ -337,7 +342,7 @@ impl Component for BranchList {
     }
 
     if self.error.is_some() {
-      let err_size = self.error.clone().unwrap().lines().count() + 2;
+      let err_size = cmp::max(self.error.clone().unwrap().lines().count() + 2, 5);
       let layout = Layout::new(Direction::Vertical, [
         Constraint::Fill(1),
         Constraint::Length(u16::try_from(err_size)?),

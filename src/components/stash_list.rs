@@ -40,14 +40,14 @@ impl StashItem {
   }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StashList {
   stashes: Vec<StashItem>,
   list_state: ListState,
 }
 
-impl StashList {
-  pub fn new() -> Self {
+impl Default for StashList {
+  fn default() -> Self {
     let stashes: Vec<StashItem> =
       git_stashes().unwrap().iter().map(|git_stash| StashItem::new(git_stash.clone())).collect();
     StashList { stashes, list_state: ListState::default() }

@@ -157,6 +157,6 @@ pub fn version() -> String {
 Authors: {author}
 Config directory: {config_dir_path}
 Data directory: {data_dir_path}
-Log leve: {log_level}"
+Log level: {log_level}"
   )
 }

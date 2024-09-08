@@ -14,3 +14,10 @@ Git branch and stash manager
 
 Logs can be found at `~/Library/Application Support/com.rrushton.git-branch-manager/git-branch-manager.log` for prod
 builds and in `.data/` for dev builds.
+
+## TODO List
+
+- Multiple git implementations so we can have a faster non-cli version for repo's that can use it. Originally I had two,
+  but being new to rust dealing with an async injected repository was a yak shave I didn't need at the time. So, I
+  decided to strip it back to just a CLI impl until a point where I was happy enough with that being async that I try
+  and replace it with an injected git2 or gitoxide version.
