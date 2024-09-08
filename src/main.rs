@@ -1,11 +1,7 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 
-use crate::{
-  app::App,
-  cli::Cli,
-  utils::{initialize_logging, initialize_panic_handler},
-};
+use crate::{app::App, cli::Cli};
 
 pub mod action;
 pub mod app;
@@ -13,15 +9,15 @@ pub mod cli;
 pub mod components;
 pub mod config;
 pub mod error;
+pub mod errors;
 pub mod git;
+pub mod logging;
 pub mod mode;
 pub mod tui;
-pub mod utils;
 
 async fn tokio_main() -> Result<()> {
-  initialize_logging()?;
-
-  initialize_panic_handler()?;
+  logging::init()?;
+  errors::init()?;
 
   Cli::parse();
   let mut app = App::new()?;

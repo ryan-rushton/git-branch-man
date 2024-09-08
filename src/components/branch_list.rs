@@ -224,8 +224,7 @@ impl BranchList {
     let component = Paragraph::new(text)
       .block(Block::bordered().title("Error"))
       .style(Style::from(Color::Red))
-      .wrap(Wrap { trim: true })
-      .scroll((1, 0));
+      .wrap(Wrap { trim: true });
     f.render_widget(component, area);
   }
 }
@@ -342,7 +341,7 @@ impl Component for BranchList {
     }
 
     if self.error.is_some() {
-      let err_size = cmp::max(self.error.clone().unwrap().lines().count() + 2, 5);
+      let err_size = self.error.clone().unwrap().trim().lines().count() + 2;
       let layout = Layout::new(Direction::Vertical, [
         Constraint::Fill(1),
         Constraint::Length(u16::try_from(err_size)?),
