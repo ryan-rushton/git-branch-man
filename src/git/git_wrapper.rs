@@ -42,8 +42,8 @@ impl GitStash {
   }
 }
 
-pub fn git_local_branches() -> Result<Vec<GitBranch>, Error> {
-  let res = run_git_command(&["branch", "--list", "-vv"])?;
+pub async fn git_local_branches() -> Result<Vec<GitBranch>, Error> {
+  let res = run_git_command(&["branch", "--list", "-vv"]).await?;
 
   let branches: Vec<GitBranch> = res
     .lines()
@@ -76,8 +76,8 @@ pub fn git_local_branches() -> Result<Vec<GitBranch>, Error> {
   Ok(branches)
 }
 
-pub fn git_stashes() -> Result<Vec<GitStash>, Error> {
-  let res = run_git_command(&["branch", "--list"])?;
+pub async fn git_stashes() -> Result<Vec<GitStash>, Error> {
+  let res = run_git_command(&["branch", "--list"]).await?;
 
   let stashes: Vec<GitStash> = res
     .lines()
@@ -88,31 +88,31 @@ pub fn git_stashes() -> Result<Vec<GitStash>, Error> {
   Ok(stashes)
 }
 
-pub fn git_checkout_branch_from_name(branch_name: &str) -> Result<(), Error> {
-  run_git_command(&["checkout", branch_name])?;
+pub async fn git_checkout_branch_from_name(branch_name: &str) -> Result<(), Error> {
+  run_git_command(&["checkout", branch_name]).await?;
   Ok(())
 }
 
-pub fn git_checkout_branch(branch: &GitBranch) -> Result<(), Error> {
-  git_checkout_branch_from_name(&branch.name)
+pub async fn git_checkout_branch(branch: &GitBranch) -> Result<(), Error> {
+  git_checkout_branch_from_name(&branch.name).await
 }
 
-pub fn git_validate_branch_name(name: &str) -> Result<bool, Error> {
-  let res = run_git_command(&["check-ref-format", "--branch", name]);
+pub async fn git_validate_branch_name(name: &str) -> Result<bool, Error> {
+  let res = run_git_command(&["check-ref-format", "--branch", name]).await;
   Ok(res.is_ok())
 }
 
-pub fn git_create_branch(to_create: &GitBranch) -> Result<(), Error> {
-  run_git_command(&["checkout", "-b", &to_create.name])?;
+pub async fn git_create_branch(to_create: &GitBranch) -> Result<(), Error> {
+  run_git_command(&["checkout", "-b", &to_create.name]).await?;
   Ok(())
 }
 
-pub fn git_delete_branch(to_delete: &GitBranch) -> Result<(), Error> {
-  run_git_command(&["branch", "-D", &to_delete.name])?;
+pub async fn git_delete_branch(to_delete: &GitBranch) -> Result<(), Error> {
+  run_git_command(&["branch", "-D", &to_delete.name]).await?;
   Ok(())
 }
 
-fn run_git_command(args: &[&str]) -> Result<String, Error> {
+async fn run_git_command(args: &[&str]) -> Result<String, Error> {
   let args_log_command = args.join(" ");
   info!("Running `git {}`", args_log_command);
   let res = Command::new("git").args(args).output();

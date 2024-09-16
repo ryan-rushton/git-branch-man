@@ -48,9 +48,15 @@ pub struct StashList {
 
 impl Default for StashList {
   fn default() -> Self {
+    StashList { stashes: Vec::new(), list_state: ListState::default() }
+  }
+}
+
+impl StashList {
+  pub async fn load(&mut self) {
     let stashes: Vec<StashItem> =
-      git_stashes().unwrap().iter().map(|git_stash| StashItem::new(git_stash.clone())).collect();
-    StashList { stashes, list_state: ListState::default() }
+        git_stashes().await.unwrap().iter().map(|git_stash| StashItem::new(git_stash.clone())).collect();
+    self.stashes = stashes;
   }
 }
 
