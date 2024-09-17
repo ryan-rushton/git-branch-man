@@ -42,12 +42,12 @@ impl BranchInput {
     Some(input)
   }
 
-  fn validate_branch_name(&mut self, current_branches: Vec<&GitBranch>) {
+  async fn validate_branch_name(&mut self, current_branches: Vec<&GitBranch>) {
     if self.text_input.lines().first().is_none() {
       return;
     }
     let proposed_name = self.text_input.lines().first().unwrap();
-    let is_valid = git_validate_branch_name(proposed_name);
+    let is_valid = git_validate_branch_name(proposed_name).await;
     let is_unique_name = !current_branches.iter().any(|b| b.name.eq(proposed_name));
     if is_valid.is_err() || !is_valid.unwrap() || !is_unique_name {
       self.text_input.set_style(Style::default().fg(Color::LightRed));
@@ -84,11 +84,11 @@ impl BranchInput {
       },
       _ => {
         if self.text_input.input(Input::from(key_event)) {
-          self.validate_branch_name(current_branches);
           let new_branch_name = self.get_text();
           if new_branch_name.is_some() {
             self.input_state.value = new_branch_name;
           }
+          self.validate_branch_name(current_branches);
         }
         None
       },

@@ -1,5 +1,3 @@
-use std::{future::Future, pin::Pin, process::Output};
-
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
   layout::{Constraint, Direction, Layout, Rect},
@@ -60,7 +58,7 @@ impl Default for BranchList {
 }
 
 impl BranchList {
-  pub async fn load(&mut self) {
+  async fn load(&mut self) {
     let branches: Vec<BranchItem> =
       git_local_branches().await.unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
     self.branches = branches;
@@ -182,8 +180,7 @@ impl BranchList {
     Ok(())
   }
 
-  async fn maybe_handle_git_error(&mut self, future: impl Future<Output = Result<(), Error>>) {
-    let res = future.await;
+  async fn maybe_handle_git_error(&mut self, res: Result<(), Error>) {
     if res.is_err() {
       let error = res.err().unwrap();
       error!("{}", error);
@@ -301,14 +298,18 @@ impl Component for BranchList {
         )
       },
       Action::CheckoutSelectedBranch => {
-        let result = self.checkout_selected();
-        let _ = self.maybe_handle_git_error(result);
+        tokio::spawn(async {
+          let result = self.checkout_selected().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       Action::CreateBranch(name) => {
         self.mode = Mode::Selection;
-        let result = self.create_branch(name);
-        let _ = self.maybe_handle_git_error(result);
+        tokio::spawn(async {
+          let result = self.create_branch(name).await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(Some(Action::EndInputMod))
       },
       Action::StageBranchForDeletion => {
@@ -320,13 +321,17 @@ impl Component for BranchList {
         Ok(None)
       },
       Action::DeleteBranch => {
-        let result = self.deleted_selected();
-        let _ = self.maybe_handle_git_error(result);
+        tokio::spawn(async {
+          let result = self.deleted_selected().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       Action::DeleteStagedBranches => {
-        let result = self.delete_staged_branches();
-        let _ = self.maybe_handle_git_error(result);
+        tokio::spawn(async {
+          let result = self.delete_staged_branches().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       _ => Ok(None),
