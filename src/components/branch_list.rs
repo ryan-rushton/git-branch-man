@@ -14,7 +14,9 @@ use crate::{
     Component,
   },
   error::Error,
-  git::git_repo::{GitBranch, GitRepo},
+  git::git_wrapper::{
+    git_checkout_branch_from_name, git_create_branch, git_delete_branch, git_local_branches, GitBranch,
+  },
   tui::Frame,
 };
 
@@ -30,7 +32,6 @@ enum Mode {
 
 pub struct BranchList {
   mode: Mode,
-  repo: Box<dyn GitRepo>,
   error: Option<String>,
   // List state
   branches: Vec<BranchItem>,
@@ -41,21 +42,26 @@ pub struct BranchList {
   instruction_footer: InstructionFooter,
 }
 
-impl BranchList {
-  pub fn new(repo: Box<dyn GitRepo>) -> Self {
+impl Default for BranchList {
+  fn default() -> Self {
     // Assume branch names are all valid as they come from git
-    let branches: Vec<BranchItem> =
-      repo.local_branches().unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
     BranchList {
-      repo,
       mode: Mode::Selection,
       error: None,
-      branches,
+      branches: Vec::new(),
       list_state: ListState::default(),
       selected_index: 0,
       branch_input: BranchInput::new(),
       instruction_footer: InstructionFooter::default(),
     }
+  }
+}
+
+impl BranchList {
+  async fn load(&mut self) {
+    let branches: Vec<BranchItem> =
+      git_local_branches().await.unwrap().iter().map(|branch| BranchItem::new(branch.clone(), true)).collect();
+    self.branches = branches;
   }
 
   pub fn clear_error(&mut self) {
@@ -90,13 +96,13 @@ impl BranchList {
     self.branches.get(self.selected_index)
   }
 
-  fn checkout_selected(&mut self) -> Result<(), Error> {
+  async fn checkout_selected(&mut self) -> Result<(), Error> {
     let maybe_selected = self.get_selected_branch();
     if maybe_selected.is_none() {
       return Ok(());
     }
     let name_to_checkout = maybe_selected.unwrap().branch.name.clone();
-    self.repo.checkout_branch_from_name(&name_to_checkout)?;
+    git_checkout_branch_from_name(&name_to_checkout).await?;
     for existing_branch in self.branches.iter_mut() {
       existing_branch.branch.is_head = existing_branch.branch.name == name_to_checkout;
     }
@@ -115,12 +121,12 @@ impl BranchList {
     selected.stage_for_deletion(stage);
   }
 
-  pub fn deleted_selected(&mut self) -> Result<(), Error> {
+  pub async fn deleted_selected(&mut self) -> Result<(), Error> {
     let selected = self.branches.get(self.selected_index);
     if selected.is_none() {
       return Ok(());
     }
-    let delete_result = self.repo.delete_branch(&selected.unwrap().branch);
+    let delete_result = git_delete_branch(&selected.unwrap().branch).await;
     if delete_result.is_err() {
       return Ok(());
     }
@@ -131,7 +137,7 @@ impl BranchList {
     Ok(())
   }
 
-  pub fn delete_staged_branches(&mut self) -> Result<(), Error> {
+  pub async fn delete_staged_branches(&mut self) -> Result<(), Error> {
     let mut indexes_to_delete: Vec<usize> = Vec::new();
 
     for branch_index in 0..self.branches.len() {
@@ -139,7 +145,7 @@ impl BranchList {
       if !branch_item.staged_for_deletion {
         continue;
       }
-      let del_result = self.repo.delete_branch(&branch_item.branch);
+      let del_result = git_delete_branch(&branch_item.branch).await;
       if del_result.is_ok() {
         indexes_to_delete.push(branch_index);
       } else {
@@ -161,12 +167,12 @@ impl BranchList {
     Ok(())
   }
 
-  fn create_branch(&mut self, name: String) -> Result<(), Error> {
+  async fn create_branch(&mut self, name: String) -> Result<(), Error> {
     let branch = GitBranch { name: name.clone(), is_head: false, upstream: None };
-    self.repo.create_branch(&branch)?;
+    git_create_branch(&branch).await?;
     self.branches.push(BranchItem::new(branch, true));
     self.branches.sort_by(|a, b| a.branch.name.cmp(&b.branch.name));
-    self.repo.checkout_branch_from_name(&name)?;
+    git_checkout_branch_from_name(&name).await?;
     for existing_branch in self.branches.iter_mut() {
       existing_branch.branch.is_head = existing_branch.branch.name == name;
     }
@@ -174,9 +180,9 @@ impl BranchList {
     Ok(())
   }
 
-  fn maybe_handle_git_error(&mut self, err: Option<Error>) {
-    if err.is_some() {
-      let error = err.unwrap();
+  async fn maybe_handle_git_error(&mut self, res: Result<(), Error>) {
+    if res.is_err() {
+      let error = res.err().unwrap();
       error!("{}", error);
       self.error = Some(error.to_string());
     }
@@ -285,21 +291,25 @@ impl Component for BranchList {
         Ok(None)
       },
       Action::UpdateNewBranchName(key_event) => {
-        Ok(self.branch_input.handle_key_event(
-          key_event,
-          &*self.repo,
-          self.branches.iter().map(|branch_item| &branch_item.branch).collect(),
-        ))
+        Ok(
+          self
+            .branch_input
+            .handle_key_event(key_event, self.branches.iter().map(|branch_item| &branch_item.branch).collect()),
+        )
       },
       Action::CheckoutSelectedBranch => {
-        let result = self.checkout_selected();
-        self.maybe_handle_git_error(result.err());
+        tokio::spawn(async {
+          let result = self.checkout_selected().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       Action::CreateBranch(name) => {
         self.mode = Mode::Selection;
-        let result = self.create_branch(name);
-        self.maybe_handle_git_error(result.err());
+        tokio::spawn(async {
+          let result = self.create_branch(name).await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(Some(Action::EndInputMod))
       },
       Action::StageBranchForDeletion => {
@@ -311,13 +321,17 @@ impl Component for BranchList {
         Ok(None)
       },
       Action::DeleteBranch => {
-        let result = self.deleted_selected();
-        self.maybe_handle_git_error(result.err());
+        tokio::spawn(async {
+          let result = self.deleted_selected().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       Action::DeleteStagedBranches => {
-        let result = self.delete_staged_branches();
-        self.maybe_handle_git_error(result.err());
+        tokio::spawn(async {
+          let result = self.delete_staged_branches().await;
+          self.maybe_handle_git_error(result);
+        });
         Ok(None)
       },
       _ => Ok(None),
@@ -337,7 +351,7 @@ impl Component for BranchList {
     }
 
     if self.error.is_some() {
-      let err_size = self.error.clone().unwrap().lines().count() + 2;
+      let err_size = self.error.clone().unwrap().trim().lines().count() + 2;
       let layout = Layout::new(Direction::Vertical, [
         Constraint::Fill(1),
         Constraint::Length(u16::try_from(err_size)?),

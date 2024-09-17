@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::{
   components::Component,
-  git::git_repo::{GitRepo, GitStash},
+  git::git_wrapper::{git_stashes, GitStash},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -40,17 +40,23 @@ impl StashItem {
   }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StashList {
   stashes: Vec<StashItem>,
   list_state: ListState,
 }
 
+impl Default for StashList {
+  fn default() -> Self {
+    StashList { stashes: Vec::new(), list_state: ListState::default() }
+  }
+}
+
 impl StashList {
-  pub fn new(mut repo: Box<dyn GitRepo>) -> Self {
+  pub async fn load(&mut self) {
     let stashes: Vec<StashItem> =
-      repo.stashes().unwrap().iter().map(|git_stash| StashItem::new(git_stash.clone())).collect();
-    StashList { stashes, list_state: ListState::default() }
+        git_stashes().await.unwrap().iter().map(|git_stash| StashItem::new(git_stash.clone())).collect();
+    self.stashes = stashes;
   }
 }
 
